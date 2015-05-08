@@ -31,31 +31,7 @@ class ImportService extends BaseApplicationComponent
      */
     public function columns($file)
     {
-
-        // Open CSV file
-        $data = $this->_open($file);
-
-        // Return only column names
-        return array_shift($data);
-    }
-
-    /**
-     * Get CSV data.
-     *
-     * @param string $file
-     *
-     * @return array
-     */
-    public function data($file)
-    {
-        // Open CSV file
-        $data = $this->_open($file);
-
-        // Skip first row
-        array_shift($data);
-
-        // Return all data
-        return $data;
+        return $this->readRow($file, 0);
     }
 
     /**
@@ -660,7 +636,7 @@ class ImportService extends BaseApplicationComponent
     {
 
         // Open file
-        $data = $this->data($settings['file']);
+        $data = $this->readRow($settings['file'], $step + 1);
 
         // Adjust settings for one row
         $model = Import_HistoryRecord::model()->findById($history);
@@ -668,7 +644,7 @@ class ImportService extends BaseApplicationComponent
         $model->save();
 
         // Import row
-        $this->row($step, $data[$step], $settings);
+        $this->row($step, $data, $settings);
 
         // Finish
         $this->finish($settings, false);
@@ -677,53 +653,96 @@ class ImportService extends BaseApplicationComponent
         craft()->request->redirect('import/history');
     }
 
+
+    protected function detectDelimiter($row)
+    {
+        // Detect delimiter from first row
+        $delimiters = array();
+        $delimiters[ImportModel::DelimiterSemicolon] = substr_count($row, ImportModel::DelimiterSemicolon);
+        $delimiters[ImportModel::DelimiterComma]     = substr_count($row, ImportModel::DelimiterComma);
+        $delimiters[ImportModel::DelimiterPipe]      = substr_count($row, ImportModel::DelimiterPipe);
+
+        // Sort by delimiter with most occurences
+        arsort($delimiters, SORT_NUMERIC);
+
+        // Give me the keys
+        $delimiters = array_keys($delimiters);
+
+        // Use first key -> this is the one with most occurences
+        return array_shift($delimiters);
+    }
+
+
     /**
-     * Special function that handles csv delimiter detection.
+     * Counts the number of rows in a file
+     *
+     * @param string $file
+     *
+     * @return array
+     **/
+    public function countRows($file)
+    {
+        if (!file_exists($file)) {
+            return 0;
+        }
+
+        @ini_set('auto_detect_line_endings', true);
+
+        $handle = fopen($file, 'r');
+        $count  = 0;
+
+        while (fgets($handle)) {
+            $count++;
+        }
+
+        fclose($handle);
+
+        return $count;
+    }
+
+
+    /**
+     * Reads one zero-indexed row from a file.
      *
      * @param string $file
      *
      * @return array
      */
-    protected function _open($file)
+    public function readRow($file, $onlyRow)
     {
-        $data = array();
-
-        // Check if file exists in the first place
-        if (file_exists($file)) {
-
-            // Automatically detect line endings
-            @ini_set('auto_detect_line_endings', true);
-
-            // Open file into rows
-            $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-            // Detect delimiter from first row
-            $delimiters = array();
-            $delimiters[ImportModel::DelimiterSemicolon] = substr_count($lines[0], ImportModel::DelimiterSemicolon);
-            $delimiters[ImportModel::DelimiterComma]     = substr_count($lines[0], ImportModel::DelimiterComma);
-            $delimiters[ImportModel::DelimiterPipe]      = substr_count($lines[0], ImportModel::DelimiterPipe);
-
-            // Sort by delimiter with most occurences
-            arsort($delimiters, SORT_NUMERIC);
-
-            // Give me the keys
-            $delimiters = array_keys($delimiters);
-
-            // Use first key -> this is the one with most occurences
-            $delimiter = array_shift($delimiters);
-
-            // Open file and parse csv rows
-            $handle = fopen($file, 'r');
-            while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
-
-                // Add row to data array
-                $data[] = $row;
-            }
-            fclose($handle);
+        if (!file_exists($file)) {
+            return false;
         }
 
-        // Return data array
-        return $data;
+        // Automatically detect line endings
+        @ini_set('auto_detect_line_endings', true);
+
+        // Open file and parse csv rows
+        $handle = fopen($file, 'r');
+
+        // Look for the first non-empty line and auto-detect the delimiter
+        $delimiter = null;
+        $line      = 0;
+        while (($row = fgets($handle)) !== false) {
+            if ($row) {
+                $delimiter = $this->detectDelimiter($row);
+                break;
+            }
+            $line++;
+        }
+
+        fseek($handle, $line);
+
+        $line = 0;
+        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+            if ($line === $onlyRow) {
+                fclose($handle);
+                return $row;
+            }
+        }
+
+        fclose($handle);
+        return [];
     }
 
     /**

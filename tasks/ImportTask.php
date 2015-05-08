@@ -90,8 +90,8 @@ class ImportTask extends BaseTask
             $this->backupFile = $backup->run();
         }
 
-        // Open file
-        $data = craft()->import->data($settings->file);
+        // Get a row from the file
+        $data = craft()->import->readRow($settings->file, $step + 1);
 
         // On start
         if (!$step) {
@@ -102,10 +102,10 @@ class ImportTask extends BaseTask
         }
 
         // Check if row exists
-        if (isset($data[$step])) {
+        if ($data) {
 
             // Import row
-            craft()->import->row($step, $data[$step], $settings);
+            craft()->import->row($step, $data, $settings);
         }
 
         // When finished

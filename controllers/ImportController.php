@@ -108,7 +108,7 @@ class ImportController extends BaseController
         $unique = craft()->request->getParam('unique');
 
         // Get rows/steps from file
-        $rows = count(craft()->import->data($file));
+        $rows = craft()->import->countRows($file);
 
         // Proceed when atleast one row
         if ($rows) {
