@@ -739,6 +739,7 @@ class ImportService extends BaseApplicationComponent
                 fclose($handle);
                 return $row;
             }
+            $line++;
         }
 
         fclose($handle);
