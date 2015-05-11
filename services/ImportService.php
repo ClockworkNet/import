@@ -731,8 +731,9 @@ class ImportService extends BaseApplicationComponent
             $line++;
         }
 
+        rewind($handle);
+
         $line = 0;
-        fseek($handle, $line);
         while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
             if ($line === $onlyRow) {
                 fclose($handle);
